@@ -446,17 +446,4 @@ After training, the following files are saved in `--checkpoints`:
 | `cilclassifier_vit_exp{e}_p16_task{t}.pth` | ViT CIL linear classifier after task `t` |
 | `tilclassifier_vit_exp{e}_p16_task{t}.pth` | ViT TIL linear classifier after task `t` |
 
----
 
-## Citation
-
-If you use this code, please cite:
-
-```bibtex
-@article{patchadanet2025,
-  title   = {PatchAdaNet: Unsupervised Continual Learning via Independent Patch-Level Representations},
-  author  = {},
-  journal = {},
-  year    = {2025}
-}
-```
