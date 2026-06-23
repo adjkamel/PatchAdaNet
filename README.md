@@ -157,14 +157,13 @@ five_data/
 
 | ID | Benchmark | Tasks | Classes/Task |
 |----|-----------|-------|-------------|
-| 1  | 5-Split MNIST | 5 | 2 |
-| 2  | Permuted MNIST | 10 | 10 |
-| 3  | 5-Datasets | 5 | 10 |
+| 3  | 5-Datasets (MNIST + notMNIST + SVHN + Fashion-MNIST + CIFAR-10) | 5 | 10 |
 | 4  | 20-Split miniImageNet | 20 | 5 |
 | 5  | 5-Split CIFAR-10 | 5 | 2 |
 | 6  | 20-Split CIFAR-100 | 20 | 5 |
-| 7  | TinyImageNet | 10 | 20 |
 | 8  | 10-Split miniImageNet | 10 | 10 |
+
+> **Note:** TinyImageNet is used exclusively as the external pretraining dataset for CNN-PatchAE and ViT-PatchAE (Stage 1). It is loaded automatically when `--learn_side` is specified and does not require setting `--experiment`. The `--experiment` flag only applies to Stage 2 continual training and evaluation.
 
 ---
 
