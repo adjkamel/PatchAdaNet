@@ -92,21 +92,6 @@ tinyImagenet/
         199/
 ```
 
-### MNIST
-
-```
-mnistD/
-    train/
-        0/
-        1/
-        ...
-        9/
-    test/
-        0/
-        1/
-        ...
-        9/
-```
 
 ### 5-Datasets Benchmark (MNIST + notMNIST + SVHN + Fashion-MNIST + CIFAR-10)
 
