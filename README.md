@@ -1,6 +1,6 @@
 # PatchAdaNet
 
-**PatchAdaNet: Unsupervised Continual Learning via Independent Patch-Level Representations**
+**PatchAdaNet: PatchAdaNet: Unsupervised class incremental learning using local patches and global adapters**
 
 PatchAdaNet is a replay-free, unsupervised class-incremental learning framework that separates universal structural feature learning from task-specific adaptation. It operates in two stages:
 
