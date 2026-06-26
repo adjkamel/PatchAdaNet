@@ -392,7 +392,7 @@ python main.py \
 
 | Argument | Default | Description |
 |---|---|---|
-| --model | cnn | Backbone: cnn or vit |
+| --model | cnn | Model: cnn or vit |
 | --experiment | 1 | Benchmark ID (see table above) |
 | --gfc | off | Enable GFC drift regularization |
 | --ewc_lambda | 5000 | EWC penalty weight λ |
