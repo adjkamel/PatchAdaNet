@@ -391,27 +391,27 @@ python main.py \
 ## Key Arguments
 
 | Argument | Default | Description |
-|----------|---------|-------------|
-| `--model` | `cnn` | Backbone: `cnn` or `vit` |
-| `--experiment` | `5` | Benchmark ID (see table above) |
-| `--gfc` | off | Enable GFC drift regularization |
-| `--ewc_lambda` | `5000` | EWC penalty weight λ |
-| `--gfc_alpha` | `0.1` | GFC drift loss weight α |
-| `--n_parts` | `16` | Number of patches (4×4 grid) |
-| `--img_size` | `64` | Input image size |
-| `--epochs_side` | `20` | Epochs for patch autoencoder pretraining |
-| `--epochs_glob` | `30` | Epochs per task for global model |
-| `--epochs_lin` | `150` | Epochs for linear classifier |
-| `--n_repeat_layer_adapter` | `3` | Adapter layers per depth |
-| `--feat_map` | `64` | [CNN] Base feature width F |
-| `--vit_dim` | `128` | [ViT] Token embedding dimension |
-| `--vit_patch` | `4` | [ViT] Sub-token size in pixels |
-| `--n_blocks` | `3` | [ViT] Number of Transformer encoder blocks |
-| `--cil` | off | Evaluate under CIL protocol |
-| `--til` | off | Evaluate under TIL protocol |
-| `--eval_forget` | off | Enable per-task forgetting measurement |
-| `--checkpoints` | `./checkpoints` | Directory for saving checkpoints |
-| `--data_root` | `./` | Root directory for datasets |
+|---|---|---|
+| --model | cnn | Backbone: cnn or vit |
+| --experiment | 1 | Benchmark ID (see table above) |
+| --gfc | off | Enable GFC drift regularization |
+| --ewc_lambda | 5000 | EWC penalty weight λ |
+| --gfc_alpha | 0.1 | GFC drift loss weight α |
+| --n_parts | 16 | Number of patches (4×4 grid) |
+| --img_size | 64 | Input image size |
+| --epochs_side | 20 | Epochs for patch autoencoder pretraining |
+| --epochs_glob | 30 | Epochs per task for global model |
+| --epochs_lin | 150 | Epochs for linear classifier |
+| --n_repeat_layer_adapter | 3 | Adapter layers per depth |
+| --feat_map | 64 | [CNN] Base feature width F |
+| --vit_dim | 128 | [ViT] Token embedding dimension |
+| --vit_patch | 4 | [ViT] Sub-token size in pixels |
+| --n_blocks | 3 | [ViT] Number of Transformer encoder blocks |
+| --cil | off | Evaluate under CIL protocol |
+| --til | off | Evaluate under TIL protocol |
+| --eval_forget | off | Enable per-task forgetting measurement |
+| --checkpoints | ./checkpoints | Directory for saving checkpoints |
+| --data_root | ./ | Root directory for datasets |
 
 ---
 
@@ -420,15 +420,15 @@ python main.py \
 After training, the following files are saved in `--checkpoints`:
 
 | File | Description |
-|------|-------------|
-| `cnn_p16_side{i}.pth` | CNN-PatchAE branch for patch position `i` |
-| `vit_p16_side{i}.pth` | ViT-PatchAE branch for patch position `i` |
-| `GlobalDecoder_exp{e}_p16_task{t}.pth` | CNN-ImageAE after task `t` |
-| `GlobalViT_exp{e}_p16_task{t}.pth` | ViT-ImageAE after task `t` |
-| `GFC_exp{e}_p16_task{t}_d{d}.pth` | GFC centroid at depth `d` after task `t` |
-| `cilclassifier_cnn_exp{e}_p16_task{t}.pth` | CNN CIL linear classifier after task `t` |
-| `tilclassifier_cnn_exp{e}_p16_task{t}.pth` | CNN TIL linear classifier after task `t` |
-| `cilclassifier_vit_exp{e}_p16_task{t}.pth` | ViT CIL linear classifier after task `t` |
-| `tilclassifier_vit_exp{e}_p16_task{t}.pth` | ViT TIL linear classifier after task `t` |
+|---|---|
+| cnn_p16_side{i}.pth | CNN-PatchAE branch for patch position i |
+| vit_p16_side{i}.pth | ViT-PatchAE branch for patch position i |
+| GlobalDecoder_exp{e}_p16_task{t}.pth | CNN-ImageAE after task t |
+| GlobalViT_exp{e}_p16_task{t}.pth | ViT-ImageAE after task t |
+| GFC_exp{e}_p16_task{t}_d{d}.pth | GFC centroid at depth d after task t |
+| cilclassifier_cnn_exp{e}_p16_task{t}.pth | CNN CIL linear classifier after task t |
+| tilclassifier_cnn_exp{e}_p16_task{t}.pth | CNN TIL linear classifier after task t |
+| cilclassifier_vit_exp{e}_p16_task{t}.pth | ViT CIL linear classifier after task t |
+| tilclassifier_vit_exp{e}_p16_task{t}.pth | ViT TIL linear classifier after task t |
 
 
