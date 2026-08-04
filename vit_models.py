@@ -1,10 +1,10 @@
+
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-# Grid helper for patch layout
+#----------------------- Build the 2D positional grid for patch tokens.
 def _make_grid(n_parts):
     if isinstance(n_parts, (list, tuple)):
         return int(n_parts[0]), int(n_parts[1])
@@ -13,9 +13,9 @@ def _make_grid(n_parts):
     assert sq * sq == n, f"n_parts={n} must be a perfect square or (rows,cols) tuple"
     return sq, sq
 
-
-# Feed-forward MLP block used inside TransformerBlock
+#----------------------- Two-layer feed-forward block used inside a Transformer block.
 class MLP(nn.Module):
+    #----------------------- Initialize the MLP.
     def __init__(self, dim, hidden_dim):
         super().__init__()
         self.net = nn.Sequential(
@@ -25,50 +25,56 @@ class MLP(nn.Module):
             nn.Linear(hidden_dim, dim),
         )
 
+    #----------------------- Forward pass.
     def forward(self, x):
         return self.net(x)
 
-
-# Multi-head self-attention block with residual connection
+#----------------------- Multi-head self-attention module.
 class Attention(nn.Module):
+    #----------------------- Initialize the Attention.
     def __init__(self, dim, heads=4):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.attn = nn.MultiheadAttention(dim, heads, batch_first=True)
 
+    #----------------------- Forward pass.
     def forward(self, x):
         xn = self.norm(x)
         out, _ = self.attn(xn, xn, xn)
         return x + out
 
-
-# Transformer block combining attention and MLP with residual connections
+#----------------------- Pre-norm Transformer encoder block (attention + MLP).
 class TransformerBlock(nn.Module):
+    #----------------------- Initialize the TransformerBlock.
     def __init__(self, dim, heads=4, mlp_ratio=4):
         super().__init__()
         self.attn = Attention(dim, heads)
         self.mlp  = MLP(dim, dim * mlp_ratio)
         self.norm = nn.LayerNorm(dim)
 
+    #----------------------- Forward pass.
     def forward(self, x):
         x = self.attn(x)
         x = x + self.mlp(self.norm(x))
         return x
 
+#----------------------- Per-depth learnable token sequences acting as GFC anchors across tasks.
+class PrototypeMemory(nn.Module):
 
-# Global Feature Centroid (GFC): per-depth running-average token sequences for cross-task regularization
-class GFC(nn.Module):
+    #----------------------- Initialize the PrototypeMemory.
     def __init__(self, momentum: float = 0.9):
         super().__init__()
         self.momentum = momentum
+
         self.tokens = nn.ParameterList()
         self.register_buffer('is_initialised', torch.tensor(False))
 
+    #----------------------- Custom loading to rebuild the ParameterList from a checkpoint.
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
                               missing_keys, unexpected_keys, error_msgs):
-        # Rebuild ParameterList from checkpoint
         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
                                       missing_keys, unexpected_keys, error_msgs)
+
         tok_keys = sorted(
             [k for k in state_dict.keys() if k.startswith(prefix + 'tokens.')],
             key=lambda x: int(x.split('.')[-1])
@@ -79,48 +85,56 @@ class GFC(nn.Module):
                 param = nn.Parameter(state_dict[key].float())
                 self.tokens.append(param)
             self.is_initialised.fill_(True)
-            print(f"  [GFC-ViT] Loaded {len(tok_keys)} GFC token sequences from checkpoint.")
+            print(f"  [PrototypeMemory-ViT] Loaded {len(tok_keys)} "
+                  f"prototype token sequences from state_dict.")
 
     @torch.no_grad()
+    #----------------------- Task 1: warm-start prototypes from frozen enc_block tokens per depth.
     def initialise(self, frozen_seqs: list):
-        # Task 1: initialize one GFC centroid per depth from frozen token sequences
         self.tokens = nn.ParameterList()
         for fs in frozen_seqs:
+
             mean_tok = fs.detach().mean(dim=0, keepdim=True)
             self.tokens.append(nn.Parameter(mean_tok.clone()))
         self.is_initialised.fill_(True)
-        print(f"  [GFC-ViT] Initialised {len(frozen_seqs)} depth centroids from task-1 frozen tokens.")
+        print(f"  [PrototypeMemory-ViT] Initialised {len(frozen_seqs)} depth "
+              f"prototypes from task-1 FROZEN enc_block outputs.")
 
     @torch.no_grad()
+    #----------------------- Task t>1: EMA-update prototypes from last adapter_block outputs.
     def update(self, adapter_out_seqs: list):
-        # Tasks > 1: EMA update of each depth centroid from adapter outputs
         if len(self.tokens) == 0:
-            raise RuntimeError("GFC not initialised. Call initialise() first.")
-        for gfc_tok, ao in zip(self.tokens, adapter_out_seqs):
-            new_mean = ao.detach().mean(dim=0, keepdim=True).float().to(gfc_tok.device)
-            gfc_tok.data.mul_(self.momentum).add_(new_mean * (1.0 - self.momentum))
-        print(f"  [GFC-ViT] Updated {len(self.tokens)} depth centroids via EMA (momentum={self.momentum}).")
+            raise RuntimeError(
+                "PrototypeMemory not initialised. "
+                "Call initialise() first or load from state_dict."
+            )
+        for proto_tok, ao in zip(self.tokens, adapter_out_seqs):
+            new_mean = ao.detach().mean(dim=0, keepdim=True).float().to(proto_tok.device)
+            proto_tok.data.mul_(self.momentum).add_(new_mean * (1.0 - self.momentum))
+        print(f"  [PrototypeMemory-ViT] Updated {len(self.tokens)} depth prototypes "
+              f"from ADAPTER outputs (momentum={self.momentum}).")
 
+    #----------------------- Pull each adapter_block output toward its prototype during training.
     def alignment_loss(self, adapter_out_seqs: list) -> torch.Tensor:
-        # Drift loss: MSE between adapter outputs and detached GFC centroids, averaged across depths
         if len(self.tokens) == 0:
             return torch.tensor(0.0, device=adapter_out_seqs[0].device)
+
         loss = torch.tensor(0.0, device=adapter_out_seqs[0].device)
-        for ao, gfc_tok in zip(adapter_out_seqs, self.tokens):
+        for ao, proto_tok in zip(adapter_out_seqs, self.tokens):
             B  = ao.shape[0]
-            pt = gfc_tok.detach().expand(B, -1, -1)
+            pt = proto_tok.detach().expand(B, -1, -1)
             loss = loss + F.mse_loss(ao, pt.type_as(ao))
         return loss / len(adapter_out_seqs)
 
+    #----------------------- Return the deepest prototype token sequence flattened for the classifier.
     def flat_deep(self, B: int, device) -> torch.Tensor:
-        # Return the deepest GFC centroid flattened for classifier feature concatenation
         if len(self.tokens) == 0:
             return None
         return self.tokens[-1].detach().flatten(1).expand(B, -1).to(device)
 
-
-# Single-patch ViT autoencoder (ViT-PatchAE branch)
+#----------------------- Single-patch ViT autoencoder branch.
 class SideViT(nn.Module):
+    #----------------------- Initialize the SideViT.
     def __init__(self, channel, patch_h, patch_w,
                  patch_size=4, dim=128, n_blocks=2, heads=4):
         super().__init__()
@@ -148,6 +162,7 @@ class SideViT(nn.Module):
         self.dec_norm    = nn.LayerNorm(dim)
         self.dec_proj    = nn.Linear(dim, token_in_dim)
 
+    #----------------------- Split an image into flattened patch tokens.
     def patchify(self, x):
         B, C, H, W = x.shape
         ps = self.patch_size
@@ -156,6 +171,7 @@ class SideViT(nn.Module):
         x = x.permute(0, 2, 4, 1, 3, 5).reshape(B, nh * nw, C * ps * ps)
         return x
 
+    #----------------------- Reassemble patch tokens back into an image.
     def unpatchify(self, tokens):
         B, N, D = tokens.shape
         C, ps   = self.channel, self.patch_size
@@ -164,8 +180,8 @@ class SideViT(nn.Module):
         x = x.permute(0, 3, 1, 4, 2, 5).reshape(B, C, nh * ps, nw * ps)
         return x
 
+    #----------------------- Run the encoder blocks and return per-depth token sequences.
     def encode_blocks(self, x):
-        # Return per-depth token sequences from all encoder blocks
         tokens = self.patch_embed(self.patchify(x)) + self.pos_embed
         block_outputs = []
         for blk in self.enc_blocks:
@@ -173,6 +189,7 @@ class SideViT(nn.Module):
             block_outputs.append(tokens)
         return block_outputs
 
+    #----------------------- Forward pass.
     def forward(self, x):
         block_outputs = self.encode_blocks(x)
         enc_tokens    = self.enc_norm(block_outputs[-1])
@@ -183,9 +200,9 @@ class SideViT(nn.Module):
         recon = self.unpatchify(self.dec_proj(dec))
         return recon, enc_tokens
 
-
-# Collection of P independent SideViT branches, one per patch position (ViT-PatchAE)
+#----------------------- Container of per-position SideViT branches over the patch grid.
 class SideViTMulti(nn.Module):
+    #----------------------- Initialize the SideViTMulti.
     def __init__(self, channel, img_h, img_w,
                  n_parts=16, patch_size=4, dim=128,
                  n_blocks=2, heads=4, exp=6):
@@ -203,6 +220,7 @@ class SideViTMulti(nn.Module):
                     SideViT(channel, self.patch_h, self.patch_w,
                             patch_size, dim, n_blocks, heads))
 
+    #----------------------- Split an input image into the non-overlapping patch grid.
     def _extract_patches(self, x):
         patches = []
         for r in range(self.rows):
@@ -212,6 +230,7 @@ class SideViTMulti(nn.Module):
                              c*self.patch_w:(c+1)*self.patch_w])
         return patches
 
+    #----------------------- Forward pass.
     def forward(self, x):
         patches = self._extract_patches(x)
         recons, enc_tokens_list = [], []
@@ -222,26 +241,27 @@ class SideViTMulti(nn.Module):
             enc_tokens_list.append(enc_tokens)
         return recons, enc_tokens_list
 
-
-# Global ViT autoencoder (ViT-ImageAE): continually adapts frozen patch tokens via depth-wise adapter blocks
+#----------------------- Full-image ViT autoencoder with adapters and cross-task PrototypeMemory.
 class GlobalViTAE(nn.Module):
+
+    #----------------------- Initialize the GlobalViTAE.
     def __init__(self, channel, img_h, img_w,
                  n_parts=16, patch_size=4, dim=128,
-                 n_blocks=2, heads=4, exp=6, n_layer_adapter=1,
-                 use_gfc=False, num_classes=2):
+                 n_blocks=2, heads=4, exp=6, n_layer_adapter=1,use_proto=False, supervised=False, num_classes=2):
         super().__init__()
         self.rows, self.cols = _make_grid(n_parts)
-        self.n_parts         = self.rows * self.cols
-        self.channel         = channel
-        self.img_h           = img_h
-        self.img_w           = img_w
-        self.patch_size      = patch_size
-        self.dim             = dim
-        self.n_blocks        = n_blocks
-        self.exp             = exp
+        self.n_parts     = self.rows * self.cols
+        self.channel     = channel
+        self.img_h       = img_h
+        self.img_w       = img_w
+        self.patch_size  = patch_size
+        self.dim         = dim
+        self.n_blocks    = n_blocks
+        self.exp         = exp
         self.n_layer_adapter = n_layer_adapter
-        self.n_parts_arg     = n_parts
-        self.use_gfc         = use_gfc
+        self.n_parts_arg = n_parts
+        self.use_proto=use_proto
+        self.supervised=supervised
 
         cell_h = img_h // self.rows
         cell_w = img_w // self.cols
@@ -274,16 +294,20 @@ class GlobalViTAE(nn.Module):
         self.dec_norm = nn.LayerNorm(dim)
         self.dec_proj = nn.Linear(dim, token_in_dim)
 
-        if self.use_gfc:
-            self.gfc = GFC()
+        if self.use_proto:
+            self.prototype = PrototypeMemory()
         self._frozen_token_cache = None
 
+        if self.supervised and num_classes is not None:
+            self.down_features=nn.Linear(128*256, 1024)
+            self.classifier=nn.Linear(1024, num_classes)
+
+    #----------------------- Clear the cached frozen token activations.
     def invalidate_frozen_cache(self):
-        # Clear cached frozen token sequences to force recomputation
         self._frozen_token_cache = None
 
+    #----------------------- Compute the frozen per-depth token sequences.
     def _build_frozen_tokens(self, x, sidenet_multi):
-        # Build concatenated frozen token sequences from all ViT-PatchAE branches at each depth
         ph = self.img_h // self.rows
         pw = self.img_w // self.cols
 
@@ -304,8 +328,8 @@ class GlobalViTAE(nn.Module):
 
         return frozen_seqs
 
+    #----------------------- Reassemble patch tokens back into an image.
     def unpatchify(self, tokens):
-        # Reassemble token grid back to image space
         B, N, D = tokens.shape
         C, ps   = self.channel, self.patch_size
         nh, nw  = self.dec_n_tok_h, self.dec_n_tok_w
@@ -313,20 +337,25 @@ class GlobalViTAE(nn.Module):
         x = x.permute(0, 3, 1, 4, 2, 5).reshape(B, C, nh * ps, nw * ps)
         return x
 
+    #----------------------- Forward pass.
     def forward(self, x, sidenet_multi):
-        # Forward pass: build frozen tokens, apply enc+adapter blocks per depth, decode to image
-        frozen_seqs      = self._build_frozen_tokens(x, sidenet_multi)
+        frozen_seqs = self._build_frozen_tokens(x, sidenet_multi)
+
         adapter_out_seqs = []
 
         out = self.enc_blocks[0](frozen_seqs[0])
+
         for k in range(0, self.n_layer_adapter):
             out = self.adapter_blocks[k](out)
+
         adapter_out_seqs.append(out)
 
         for d in range(1, self.n_blocks):
             out = self.enc_blocks[d](frozen_seqs[d] + out)
-            for k in range(d * self.n_layer_adapter, d * self.n_layer_adapter + self.n_layer_adapter):
+
+            for k in range((d * self.n_layer_adapter), (d * self.n_layer_adapter+ self.n_layer_adapter)):
                 out = self.adapter_blocks[k](out)
+
             adapter_out_seqs.append(out)
 
         last_adp        = self.adapter_blocks[-1]
@@ -347,16 +376,22 @@ class GlobalViTAE(nn.Module):
         B               = out.shape[0]
         bottleneck_flat = bottleneck.reshape(B, -1)
 
+        if self.supervised and hasattr(self, 'classifier'):
+            bottleneck_flat_m=self.down_features(bottleneck_flat)
+            out_classifier=self.classifier(bottleneck_flat_m)
+            return recon, bottleneck_flat, adapter_out_seqs, frozen_seqs, out_classifier
+
         return recon, bottleneck_flat, adapter_out_seqs, frozen_seqs
 
+    #----------------------- Concatenate bottleneck and deepest prototype for the classifier.
     def get_classifier_features(self, x, sidenet_multi):
-        # Extract bottleneck features concatenated with deepest GFC centroid for linear classifier
         with torch.no_grad():
-            _, bottleneck_flat, *_ = self.forward(x, sidenet_multi)
 
-        B = bottleneck_flat.shape[0]
-        if self.use_gfc:
-            gfc_flat = self.gfc.flat_deep(B, bottleneck_flat.device)
-            return torch.cat([bottleneck_flat, gfc_flat], dim=1)
+             _, bottleneck_flat, *_= self.forward(x, sidenet_multi)
+
+        B          = bottleneck_flat.shape[0]
+        if self.use_proto:
+            proto_flat = self.prototype.flat_deep(B, bottleneck_flat.device)
+            return torch.cat([bottleneck_flat, proto_flat], dim=1)
         else:
             return bottleneck_flat
