@@ -8,78 +8,56 @@ import pandas as pd
 import numpy as np
 from sklearn.utils import shuffle
 
-
-
- 
+#----------------------- Return (mean, std) normalization tuples matched to each dataset.
 def _get_normalization(dataset_name, grayscale):
-    """
-    Return (mean, std) tuples matched to each dataset.
- 
-    Grayscale datasets  → 1-channel stats  (single float in tuple)
-    RGB datasets        → 3-channel stats  (three floats in tuple)
- 
-    dataset_name is matched by substring so folder naming variants
-    like "mnistD", "mnist", "MNIST" all resolve correctly.
-    """
     name = dataset_name.lower()
- 
-    # ── Grayscale datasets ──────────────────────────────────────
+
     if "mnist" in name:
-        # Standard MNIST / PermutedMNIST
+
         return (0.1307,), (0.3081,)
- 
+
     if "fashion" in name:
-        # FashionMNIST
+
         return (0.2860,), (0.3530,)
- 
-    # ── RGB datasets ────────────────────────────────────────────
+
     if "cifar100" in name:
         return (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
- 
+
     if "cifar10" in name:
-        # must come AFTER cifar100 check
+
         return (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
- 
+
     if "tinyimagenet" in name or "tiny_imagenet" in name or "tinyimagenet" in name:
         return (0.4802, 0.4481, 0.3975), (0.2770, 0.2691, 0.2821)
- 
+
     if "miniimagenet" in name or "mini_imagenet" in name:
         return (0.4733, 0.4490, 0.4029), (0.2796, 0.2722, 0.2863)
- 
+
     if "imagenet" in name:
-        # full ImageNet fallback
+
         return (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
- 
+
     if "five_data" in name or "five-data" in name:
-        # Mixed dataset – use ImageNet stats as a safe neutral baseline
+
         return (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
- 
+
     if "svhn" in name:
         return (0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)
- 
+
     if "stl" in name:
         return (0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713)
- 
-    # ── Fallback ─────────────────────────────────────────────────
-    # If dataset is unknown, use neutral 0.5/0.5 normalization
-    # (maps [0,1] → [-1,1]) for RGB, or MNIST stats for grayscale.
+
     if grayscale:
         print(f"[WARNING] Unknown dataset '{dataset_name}' – using MNIST normalization.")
         return (0.1307,), (0.3081,)
     else:
         print(f"[WARNING] Unknown dataset '{dataset_name}' – using 0.5/0.5 normalization.")
         return (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
- 
- 
+
+#----------------------- General-purpose image-folder dataset for continual learning tasks.
 class ContinualDataset(Dataset):
-    """
-    General-purpose dataset for continual learning.
-    Supports:
-      - selected_classes as list of ints  (MNIST style)
-      - selected_classes as dict {classname: id} (CIFAR/letters/etc)
-      - Fixed permutation per task (PermutedMNIST logic)
-    """
- 
+
+    #----------------------- Initialize the ContinualDataset.
     def __init__(self, dataset_name, root="./", train=True,
                  selected_classes=None, img_size=32, grayscale=True,
                  transform=None, seed=42, permute=False, task_num=0):
@@ -91,16 +69,15 @@ class ContinualDataset(Dataset):
         self.permute = permute
         self.seed = seed
         self.selected_classes_arg = selected_classes
- 
+
         self.class_to_id = None
         self.selected_class_list = None
- 
+
         if isinstance(selected_classes, dict):
             self.class_to_id = {str(k): int(v) for k, v in selected_classes.items()}
         elif isinstance(selected_classes, list):
             self.selected_class_list = [str(c) for c in selected_classes]
- 
-        # Permutation (Permuted MNIST style)
+
         if self.permute:
             idx = list(range(img_size * img_size))
             self.permute_idx = torch.tensor(
@@ -109,8 +86,7 @@ class ContinualDataset(Dataset):
             )
         else:
             self.permute_idx = None
- 
-        # Transforms
+
         if transform is None:
             mean, std = _get_normalization(dataset_name, grayscale)
             self.transform = transforms.Compose([
@@ -122,19 +98,19 @@ class ContinualDataset(Dataset):
             ])
         else:
             self.transform = transform
- 
-        # Load images
+
         self.image_paths, self.labels = [], []
         self.root_dir = Path(root) / dataset_name / ("train" if train else "test")
         print('------------------------------------',
               f"Loading dataset from: {self.root_dir}")
- 
+
         self._load_from_folders()
         self._filter_classes()
- 
+
         print(f"[{dataset_name.upper()} - {'Train' if train else 'Test'}] "
               f"Loaded {len(self.image_paths)} images. Permutation: {self.permute}")
- 
+
+    #----------------------- Load image paths and labels from the class subfolders.
     def _load_from_folders(self):
         for class_folder in sorted(os.listdir(self.root_dir)):
             class_path = self.root_dir / class_folder
@@ -144,7 +120,8 @@ class ContinualDataset(Dataset):
                 for img_path in class_path.glob(ext):
                     self.image_paths.append(img_path)
                     self.labels.append(str(class_folder))
- 
+
+    #----------------------- Keep only the classes selected for the current task.
     def _filter_classes(self):
         if self.class_to_id is not None:
             valid   = set(self.class_to_id.keys())
@@ -152,30 +129,30 @@ class ContinualDataset(Dataset):
             self.image_paths = [self.image_paths[i] for i in indices]
             self.labels      = [str(self.labels[i])  for i in indices]
             return
- 
+
         if self.selected_class_list is not None:
             valid   = set(self.selected_class_list)
             indices = [i for i, lbl in enumerate(self.labels) if str(lbl) in valid]
             self.image_paths = [self.image_paths[i] for i in indices]
             self.labels      = [str(self.labels[i])  for i in indices]
- 
+
+    #----------------------- Return the number of samples in the dataset.
     def __len__(self):
         return len(self.image_paths)
- 
+
+    #----------------------- Return the transformed image and label at an index.
     def __getitem__(self, idx):
         img_path = self.image_paths[idx]
         label    = self.labels[idx]
-  
+
         img = Image.open(img_path).convert('L' if self.grayscale else 'RGB')
         img = self.transform(img)
- 
-        # Apply permutation (PermutedMNIST)
+
         if self.permute and self.permute_idx is not None:
             c, h, w = img.shape
             flat    = img.view(-1)
             img     = flat[self.permute_idx].view(c, h, w)
- 
-        # Convert label to integer
+
         if self.class_to_id is not None:
             label = self.class_to_id[str(label)]
         else:
@@ -183,23 +160,15 @@ class ContinualDataset(Dataset):
                 label = int(label)
             except Exception:
                 pass
- 
+
         return img, label
- 
- 
-# -----------------------------------------------------------------------
-#  Loader creator  – tuned for GPU throughput
-# -----------------------------------------------------------------------
- 
+
+#----------------------- Choose a DataLoader worker count from available CPU cores.
 def _optimal_workers():
-    """
-    Use up to half the available CPU cores for data loading,
-    capped at 8 (diminishing returns above that for image datasets).
-    """
     cpu_count = os.cpu_count() or 1
     return min(8, max(4, cpu_count // 2))
- 
- 
+
+#----------------------- Build train/test DataLoaders for a task configuration.
 def create_continual_loaders(cfg,  sub_perc=0.25, batch_size=64, shuffle=True,
                              crop_mode="full", permute=False, n_shot=None):
     ds = ContinualDataset(
@@ -213,59 +182,43 @@ def create_continual_loaders(cfg,  sub_perc=0.25, batch_size=64, shuffle=True,
         task_num        = cfg.get("pidx", 0),
         seed            = cfg.get("seed", 42),
     )
- 
+
     num_workers = _optimal_workers()
 
     if n_shot is not None:
         subset = get_fewshot_from_dataset(ds, n_shot=n_shot,seed=42)
         new_ds=subset
-        
+
     else:
         new_ds=ds
-      
+
     return DataLoader(
         new_ds,
         batch_size  = batch_size,
         shuffle     = shuffle,
-        num_workers = num_workers,       # parallel CPU workers
-        pin_memory  = True,              # faster host→GPU transfers
-        prefetch_factor = 2,             # pre-fetch 2 batches per worker
-        persistent_workers = (num_workers > 0),  # keep workers alive between epochs
+        num_workers = num_workers,
+        pin_memory  = True,
+        prefetch_factor = 2,
+        persistent_workers = (num_workers > 0),
         drop_last   = False,
     )
 
-
-
-
+#----------------------- Create a few-shot subset from a ContinualDataset instance.
 def get_fewshot_from_dataset(dataset, n_shot=5, seed=42):
-    """
-    Create a few-shot subset from a ContinualDataset instance.
-    
-    Args:
-        dataset: ContinualDataset instance
-        n_shot: number of samples per class
-        seed: random seed
-    
-    Returns:
-        Subset with n_shot samples per class
-    """
     np.random.seed(seed)
-    
-    # Get all labels from the dataset
+
     all_labels = []
     for i in range(len(dataset)):
         _, label = dataset[i]
         all_labels.append(label)
-    
+
     all_labels = np.array(all_labels)
     unique_classes = np.unique(all_labels)
-    
-    # Group indices by class
+
     class_to_indices = {}
     for class_id in unique_classes:
         class_to_indices[class_id] = np.where(all_labels == class_id)[0]
-    
-    # Select n_shot indices per class
+
     selected_indices = []
     for class_id, indices in class_to_indices.items():
         if len(indices) < n_shot:
@@ -274,6 +227,5 @@ def get_fewshot_from_dataset(dataset, n_shot=5, seed=42):
         else:
             chosen = np.random.choice(indices, size=n_shot, replace=False)
         selected_indices.extend(chosen)
-    
+
     return Subset(dataset, selected_indices)
-        
