@@ -507,3 +507,5 @@ After training, the following files are saved in `--checkpoints`:
 | tilclassifier_vit_exp{e}_p16_task{t}.pth | ViT TIL linear classifier after task t |
 
 Per-run results from `run_experiments.py` are written to `--results_dir` as JSON files (one per seed or class order) together with a summary reporting mean ± standard deviation across runs.
+
+**./results** folder contains json quantitative results of the experiments presented in the paper.
