@@ -508,4 +508,4 @@ After training, the following files are saved in `--checkpoints`:
 
 Per-run results from `run_experiments.py` are written to `--results_dir` as JSON files (one per seed or class order) together with a summary reporting mean ± standard deviation across runs.
 
-**./results** folder contains json quantitative results of the experiments presented in the paper.
+**./results** folder contains json experimental results across seeds and class orders.
