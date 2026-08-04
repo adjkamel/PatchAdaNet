@@ -395,7 +395,7 @@ To measure robustness, `run_experiments.py` wraps `main.py` and repeats a full S
 
 The random seed controls Stage-2 weight initialization, batch ordering, and GFC/EWC sampling. **Stage-1 patch pretraining is never reseeded**, so run Stage 1 once and share those checkpoints across all runs with `--side_checkpoints`.
 
-#### Seed robustness — CIFAR-10, CNN (15 runs)
+#### Seed runs — CIFAR-10, CNN (15 runs)
 
 ```bash
 python run_experiments.py \
@@ -415,7 +415,7 @@ python run_experiments.py \
   --results_dir ./results
 ```
 
-#### Seed robustness — CIFAR-10, ViT (15 runs)
+#### Seed runs — CIFAR-10, ViT (15 runs)
 
 ```bash
 python run_experiments.py \
@@ -434,7 +434,7 @@ python run_experiments.py \
   --results_dir ./results
 ```
 
-#### Class-order robustness — CIFAR-100, CNN (5 runs)
+#### Class-order runs — CIFAR-100, CNN (5 runs)
 
 ```bash
 python run_experiments.py \
@@ -454,11 +454,6 @@ python run_experiments.py \
   --results_dir ./results
 ```
 
-To reproduce a single run from a specific seed instead of the full sweep, call `main.py` directly with `--seed <int>`.
-
-### Faster CNN training
-
-For the CNN backbone, `--fast_cnn` switches to a training path that pre-caches classifier features, reduces the EWC Fisher batches from 50 to 5, and reuses the frozen conv cache across tasks. The model architecture, parameters, and training strategy are unchanged; only runtime is reduced. Add `--fast_cnn` to any CNN command above.
 
 ---
 
