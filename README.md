@@ -221,7 +221,7 @@ python main.py \
   --epochs_glob 30 \
   --lr_glob 1e-4 \
   --feat_map 64 \
-  --ewc_lambda 5000 \
+  --ewc_lambda 10 \
   --proto_alpha 0.5 \
   --n_repeat_layer_adapter 3 \
   --lr_decay_factor 0.8 \
@@ -266,7 +266,7 @@ python main.py \
   --epochs_glob 30 \
   --lr_glob 1e-4 \
   --feat_map 64 \
-  --ewc_lambda 5000 \
+  --ewc_lambda 10 \
   --proto_alpha 0.5 \
   --n_repeat_layer_adapter 3 \
   --lr_decay_factor 0.8 \
@@ -287,7 +287,7 @@ python main.py \
   --epochs_glob 100 \
   --lr_glob 1e-4 \
   --feat_map 64 \
-  --ewc_lambda 5000 \
+  --ewc_lambda 10 \
   --proto_alpha 0.5 \
   --n_repeat_layer_adapter 3 \
   --lr_decay_factor 0.8 \
@@ -406,7 +406,7 @@ python run_experiments.py \
   --n_parts 16 --img_size 64 --batch 128 \
   --epochs_glob 30 --lr_glob 1e-4 \
   --epochs_lin 150 --lr_lin 1e-4 \
-  --feat_map 64 --ewc_lambda 5000 \
+  --feat_map 64 --ewc_lambda 10 \
   --proto_alpha 0.5 --n_repeat_layer_adapter 3 \
   --lr_decay_factor 0.8 \
   --data_root /path/to/data \
@@ -445,7 +445,7 @@ python run_experiments.py \
   --n_parts 16 --img_size 64 --batch 128 \
   --epochs_glob 30 --lr_glob 1e-4 \
   --epochs_lin 150 --lr_lin 1e-4 \
-  --feat_map 64 --ewc_lambda 5000 \
+  --feat_map 64 --ewc_lambda 10 \
   --proto_alpha 0.5 --n_repeat_layer_adapter 3 \
   --lr_decay_factor 0.8 \
   --data_root /path/to/data \
@@ -468,7 +468,7 @@ For the CNN backbone, `--fast_cnn` switches to a training path that pre-caches c
 |---|---|---|
 | --model | cnn | Model: cnn or vit |
 | --experiment | 1 | Benchmark ID (see table above) |
-| --ewc_lambda | 5000 | EWC penalty weight λ |
+| --ewc_lambda | 10 | EWC penalty weight λ |
 | --proto_alpha | 0.1 | GFC / prototype drift loss weight |
 | --n_parts | 16 | Number of patches (4×4 grid) |
 | --img_size | 64 | Input image size |
